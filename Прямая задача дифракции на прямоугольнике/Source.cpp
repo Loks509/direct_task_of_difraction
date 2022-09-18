@@ -8,10 +8,10 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 4.;
+double K0 = 2.;
 //double K = K0 * 1.2;
 //double K0 = 1;
-double K = K0 * 1.1;
+double K = K0 * 1.5;
 
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
@@ -597,11 +597,11 @@ int main() {
     double edge = 4.0;
     
     double x_1 = -edge, x_2 = edge;
-    int N_x = 40;
+    int N_x = 120;
     double h_x_k = (x_2 - x_1) / (double)(N_x - 1.0);
 
     double y_1 = -edge, y_2 = edge;
-    int N_y = 40;
+    int N_y = 120;
     double h_y_k = (y_2 - y_1) / (double)(N_y - 1.0);
 
     int stride_x = 0;
