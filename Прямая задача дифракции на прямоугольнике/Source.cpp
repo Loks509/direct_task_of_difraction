@@ -8,10 +8,10 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 2.;
+double K0 = 4.;
 //double K = K0 * 1.2;
 //double K0 = 1;
-double K = K0 * 1.5;
+double K = K0 * 1.0;
 
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
@@ -359,7 +359,7 @@ complex <double> Integr(double x_beg, double x_end, double y_beg, double y_end, 
         for (size_t j = 0; j < N_int; j++)
         {
             double s_x = x_beg + i * h_x + h_x / 2.0;
-            double s_y = x_beg + j * h_y + h_y / 2.0;
+            double s_y = y_beg + j * h_y + h_y / 2.0;
             complex <double> tmp = Kernel(s_x, s_y, koll_x, koll_y, K);
             Sum += tmp;
             /*if(K==K0)
@@ -493,7 +493,7 @@ int main() {
                 Am[I][J] = 1.0;
             else
                 Am[I][J] = 0.0;
-            Am[I][J] -= K * K * Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
+            Am[I][J] -= (K0 * K0 - K * K) * Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
             
             //cout << "     J = " << J << endl;
         }
@@ -563,7 +563,7 @@ int main() {
         }
         alpha.close();
     }
-    /*if (rank == 0) {
+    if (rank == 20) {
         ofstream mod("mod.txt");
         mod << "X Y Z F real imag" << endl;
         for (int i = -2*n; i < 2*n; i++)
@@ -582,7 +582,7 @@ int main() {
                     double x_end = x_beg + h_x;
                     double y_beg = C + koord_j * h_y;
                     double y_end = y_beg + h_y;
-                    Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K);
+                    Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
                 }
                 Int *= K * K;
                 Int += fallWave(K0, x);
@@ -590,7 +590,7 @@ int main() {
             }
             cout << "i_x = " << i << endl;
         }
-    }*/
+    }
 
 
 
@@ -649,7 +649,7 @@ int main() {
                 double x_end = x_beg + h_x;
                 double y_beg = C + koord_j * h_y;
                 double y_end = y_beg + h_y;
-                Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K);
+                Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
             }
             Int *= K * K;
             Int += fallWave(K0, x);
@@ -682,14 +682,14 @@ int main() {
     if (rank == 0) {
         GenerateVTK_grid(all_data, N_x * N_y, "test_file.vtk");
 
-        double time_one_oscl = 2 * Pi / 3 / pow(10, 8);
+        /*double time_one_oscl = 2 * Pi / 3 / pow(10, 8);
         int i = 1;
         for (double time = 0; time < 1 * time_one_oscl; time += time_one_oscl / 10)
         {
             string name = "time" + to_string(i) + ".vtk";
             GenerateVTK_grid(all_data, N_x * N_y, name, time);
             i++;
-        }
+        }*/
 
     }
 
