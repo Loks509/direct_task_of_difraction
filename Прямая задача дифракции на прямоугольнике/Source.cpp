@@ -8,10 +8,10 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 2.;
+double K0 = 4.;
 //double K = K0 * 1.2;
 //double K0 = 1;
-double K = K0 * 1.5;
+double K = K0 * 1.1;
 
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
@@ -194,17 +194,6 @@ void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _ran
         }
     }
 
-
-    //for (int i = _height - 1; i >= 0; i--) {
-    //    for (int j = _Nm - 1; j >= _stride + i; j--) {  //неверно. последний ранг не должен вообще ничего принимать, наверное надо как-то разделить
-    //        if (j == _stride + i) {     //дошли до диагонального элемента
-
-    //        }
-    //        else {                      //ждем данных
-
-    //        }
-    //    }
-    //}
     int variables = _Nm - _stride - _height;    //столько переменных недоступно в каждом матрице (в последней = 0)
 
     //cout << "rank = " << _rank << " var = " << variables << endl;
@@ -212,8 +201,6 @@ void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _ran
     for (int ind_x = 0; ind_x < variables; ind_x++) {   //тут принимаем все недостающие переменные для того, чтобы выполнить обратный ход в этой части матрицы
         complex <double> recv_x;
         MPI_Recv(&recv_x, 1, MPI_DOUBLE_COMPLEX, MPI_ANY_SOURCE, 3, MPI_COMM_WORLD, &stat);
-        //cout << "rank = "<<_rank<<"  "<<ind_x<<"/"<<variables << " recv data = " << recv_x << "  from rank = " << stat.MPI_SOURCE << endl;
-        //fflush(stdout);
         for (int i = 0; i < _height; i++) {     //отнимаем принятое значение, умноженное на данный столбец, от вектора правой части
             int j = _Nm - ind_x - 1;
             _Vec[i] -= _Matrix[i][j] * recv_x;
@@ -224,14 +211,10 @@ void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _ran
         int ind_d = _stride + i;                    //столбец диагонального элемента
         for (int j = _Nm - variables - 1; j > ind_d; j--) {     //если убрать variables то будет непостоянная ошибка (любопытно)
             //работаем со столбцами, от диагонального до блока с неизвестными коэффициентами (потому что при принятии уже сделали все необходимые операции)
-            //cout << "rank = " << _rank << "  j = " << j << "  " << _stride << "  razn = " << j - _stride << endl;
-            //fflush(stdout);
             _Vec[i] -= _Vec[j - _stride] * _Matrix[i][j];
         }
         for (int r = 0; r < _rank; r++) {           //рассылаем всем кто выше по матрице
             MPI_Ssend(&_Vec[i], 1, MPI_DOUBLE_COMPLEX, r, 3, MPI_COMM_WORLD);
-            //cout << "send data = " << _Vec[i] << "  to rank = " << r << endl;
-            //fflush(stdout);
         }
     }
 
@@ -306,7 +289,7 @@ void GenerateVTK(vector<vector<double>> data, string name_file = "out.vtk", doub
 void GenerateVTK_grid(double** data, int count_p, string name_file = "out.vtk", double time = -1.0) {
 
     int countOfPoints = count_p;
-    int size = pow(countOfPoints, 1.0 / 3.0);
+    int size =  pow(countOfPoints, 1.0 / 2.0);
 
     cout << "Points " << countOfPoints << endl;
 
@@ -316,15 +299,23 @@ void GenerateVTK_grid(double** data, int count_p, string name_file = "out.vtk", 
         "Example 3D regular grid VTK file." << endl <<
         "ASCII" << endl <<
         "DATASET STRUCTURED_GRID" << endl <<
-        "DIMENSIONS " << size + 1 << " " << size + 1 << " " << size + 1 << endl <<
-        "POINTS " << countOfPoints << " double" << endl;
+        "DIMENSIONS " << size << " " << size << " " << 2 << endl <<
+        "POINTS " << 2 * countOfPoints << " double" << endl;
 
     for (int ind = 0; ind < countOfPoints; ind++) {
         out << data[0][ind] << " " << data[1][ind] << " " << data[2][ind] << endl;
     }
-    out << "POINT_DATA " << countOfPoints << endl <<
+    for (int ind = 0; ind < countOfPoints; ind++) {
+        out << data[0][ind] << " " << data[1][ind] << " " << data[2][ind] + 1.0 << endl;
+    }
+
+    out << "POINT_DATA " << 2 * countOfPoints << endl <<
         "SCALARS J double 1" << endl <<
         "LOOKUP_TABLE default" << endl;
+    for (int ind = 0; ind < countOfPoints; ind++) {
+        if (time == -1) out << data[3][ind] << endl;
+        else            out << abs(complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)) << endl;
+    }
     for (int ind = 0; ind < countOfPoints; ind++) {
         if (time == -1) out << data[3][ind] << endl;
         else            out << abs(complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)) << endl;
@@ -337,10 +328,18 @@ void GenerateVTK_grid(double** data, int count_p, string name_file = "out.vtk", 
         if (time == -1) out << data[4][ind] << endl;
         else            out << (complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)).real() << endl;
     }
+    for (int ind = 0; ind < countOfPoints; ind++) {
+        if (time == -1) out << data[4][ind] << endl;
+        else            out << (complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)).real() << endl;
+    }
 
     out << 
         "SCALARS imag double 1" << endl <<
         "LOOKUP_TABLE default" << endl;
+    for (int ind = 0; ind < countOfPoints; ind++) {
+        if (time == -1) out << data[5][ind] << endl;
+        else            out << (complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)).imag() << endl;
+    }
     for (int ind = 0; ind < countOfPoints; ind++) {
         if (time == -1) out << data[5][ind] << endl;
         else            out << (complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)).imag() << endl;
@@ -440,52 +439,6 @@ bool in_range(double begin, double var, double end) {
     return (begin < var) && (var < end);
 }
 
-void toSpherical(double* decart, double* spherical) {
-    double Eps = 0.000001;
-    double x = decart[0];
-    double y = decart[1];
-    double z = decart[2];
-
-    if (in_range(-Eps, x, Eps)) {
-        if (y > 0) spherical[0] = Pi / 2.0;
-        else if (y < 0) spherical[0] = 3.0 * Pi / 2.0;
-    }
-    else if (in_range(-Eps, y, Eps)) {
-        if (x > 0) spherical[0] = 0;
-        else spherical[0] = Pi;
-    }
-    else if (x > 0 && y > 0)         spherical[0] = atan(y / x);
-    else if (x < 0)    spherical[0] = atan(y / x) + Pi;
-    else if (x > 0 && y < 0)    spherical[0] = atan(y / x) + 2.0 * Pi;
-    else {
-        spherical[0] = atan(y / x);
-    }
-
-    if (in_range(-Eps, z, Eps)) {
-       spherical[1] = Pi / 2.0;
-    }
-    else if (z < 0) {
-         spherical[1] = Pi + atan(sqrt(x * x + y * y) / z);
-    }
-    else {
-        spherical[1] = atan(sqrt(x * x + y * y) / z);
-    }
-
-
-
-    spherical[2] = sqrt(x * x + y * y + z * z);
-}
-
-void toDecart(double* decart, double* spherical) {
-    double phi = spherical[0];
-    double theta = spherical[1];
-    double rho = spherical[2];
-    decart[0] = rho * sin(theta) * cos(phi);
-    decart[1] = rho * sin(theta) * sin(phi);
-    decart[2] = rho * cos(theta);
-}
-
-
 
 int main() {
     int rank, size;
@@ -537,9 +490,9 @@ int main() {
             double y_end = y_beg + h_y;
 
             if (global_I == J)
-                Am[I][J] = 1.;
+                Am[I][J] = 1.0;
             else
-                Am[I][J] = 0.;
+                Am[I][J] = 0.0;
             Am[I][J] -= K * K * Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
             
             //cout << "     J = " << J << endl;
@@ -610,7 +563,7 @@ int main() {
         }
         alpha.close();
     }
-    if (rank == 0) {
+    /*if (rank == 0) {
         ofstream mod("mod.txt");
         mod << "X Y Z F real imag" << endl;
         for (int i = -2*n; i < 2*n; i++)
@@ -637,137 +590,108 @@ int main() {
             }
             cout << "i_x = " << i << endl;
         }
+    }*/
+
+
+
+    double edge = 4.0;
+    
+    double x_1 = -edge, x_2 = edge;
+    int N_x = 40;
+    double h_x_k = (x_2 - x_1) / (double)(N_x - 1.0);
+
+    double y_1 = -edge, y_2 = edge;
+    int N_y = 40;
+    double h_y_k = (y_2 - y_1) / (double)(N_y - 1.0);
+
+    int stride_x = 0;
+    int count_x = get_height_by_rank(rank, size, N_x);
+
+    for (int i = 0; i < rank; i++) {
+        stride_x += get_height_by_rank(i, size, N_x);
+    }
+    //cout << "rank = " << rank << "   stride = " << stride_x << "   height = " << count_x << endl;
+    int* array_stride_x = nullptr;
+    int* array_count_x = nullptr;
+
+    if (rank == 0) {
+        array_stride_x = new int[size];
+        array_count_x = new int[size];
+        for (int r = 0; r < size; r++) {
+            array_count_x[r] = get_height_by_rank(r, size, N_x) * N_y;
+            array_stride_x[r] = 0;
+            for (int i = 0; i < r; i++) {
+                array_stride_x[r] += get_height_by_rank(i, size, N_x) * N_y;
+            }
+            cout << "rank = " << r << "   stride = " << array_stride_x[r] << "   height = " << array_count_x[r] << endl;
+        }
     }
 
+    double** out_data;
+    CreateMatrixMemory(6, count_x * N_y, out_data);
 
-    //ofstream map_int("map.txt");
-    //map_int << "X Y Z abs real imag" << endl;
+    double* decart = new double[3], * sph = new double[3];
+    
+    int counter = 0;
 
-    //double edge = 6.0;
-    //
-    //double x_1 = -edge, x_2 = edge;
-    //int N_x = 40;
-    //double h_x = (x_2 - x_1) / (double)(N_x - 1.0);
+    for (int i = stride_x; i < stride_x + count_x; i++) {
+        double x = x_1 + i * h_x_k;
+        for (int j = 0; j < N_y; j++)
+        {
+            double y = y_1 + j * h_y_k;
 
-    //double y_1 = -edge, y_2 = edge;
-    //int N_y = 40;
-    //double h_y = (y_2 - y_1) / (double)(N_y - 1.0);
+            complex< double> Int = 0.;
+            for (size_t k = 0; k < N; k++)
+            {
+                int koord_i = k / n;
+                int koord_j = k % n;
+                double x_beg = A + koord_i * h_x;
+                double x_end = x_beg + h_x;
+                double y_beg = C + koord_j * h_y;
+                double y_end = y_beg + h_y;
+                Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K);
+            }
+            Int *= K * K;
+            Int += fallWave(K0, x);
+            if (_Is_nan(abs(Int))) Int = 0.0;
 
-    //double z_1 = -edge, z_2 = edge;
-    //int N_z = 40;
-    //double h_z = (z_2 - z_1) / (double)(N_z - 1.0);
+            out_data[0][counter] = x;
+            out_data[1][counter] = y;
+            out_data[2][counter] = 0.0;
+            out_data[3][counter] = abs(Int);
+            out_data[4][counter] = Int.real();
+            out_data[5][counter] = Int.imag();
+            counter++;
 
-    //int stride_x = 0;
-    //int count_x = get_height_by_rank(rank, size, N_x);
+        }
+        if (rank == 0)
+            cout << "X = " << x << endl;
+    }
 
-    //for (int i = 0; i < rank; i++) {
-    //    stride_x += get_height_by_rank(i, size, N_x);
-    //}
-    ////cout << "rank = " << rank << "   stride = " << stride_x << "   height = " << count_x << endl;
-    //int* array_stride_x = nullptr;
-    //int* array_count_x = nullptr;
+    double** all_data;
+    CreateMatrixMemory(6, N_x * N_y, all_data);
 
-    //if (rank == 0) {
-    //    array_stride_x = new int[size];
-    //    array_count_x = new int[size];
-    //    for (int r = 0; r < size; r++) {
-    //        array_count_x[r] = get_height_by_rank(r, size, N_x) * N_y * N_z;
-    //        array_stride_x[r] = 0;
-    //        for (int i = 0; i < r; i++) {
-    //            array_stride_x[r] += get_height_by_rank(i, size, N_x) * N_y * N_z;
-    //        }
-    //        cout << "rank = " << r << "   stride = " << array_stride_x[r] << "   height = " << array_count_x[r] << endl;
-    //    }
-    //}
+    MPI_Gatherv(out_data[0], count_x * N_y, MPI_DOUBLE, all_data[0], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(out_data[1], count_x * N_y, MPI_DOUBLE, all_data[1], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(out_data[2], count_x * N_y, MPI_DOUBLE, all_data[2], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(out_data[3], count_x * N_y, MPI_DOUBLE, all_data[3], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(out_data[4], count_x * N_y, MPI_DOUBLE, all_data[4], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(out_data[5], count_x * N_y, MPI_DOUBLE, all_data[5], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    //double** out_data;
-    //CreateMatrixMemory(6, count_x * N_y * N_z, out_data);
+    double create_grid = MPI_Wtime();
+    if (rank == 0) {
+        GenerateVTK_grid(all_data, N_x * N_y, "test_file.vtk");
 
-    //double* decart = new double[3], * sph = new double[3];
-    //
-    //int counter = 0;
+        double time_one_oscl = 2 * Pi / 3 / pow(10, 8);
+        int i = 1;
+        for (double time = 0; time < 1 * time_one_oscl; time += time_one_oscl / 10)
+        {
+            string name = "time" + to_string(i) + ".vtk";
+            GenerateVTK_grid(all_data, N_x * N_y, name, time);
+            i++;
+        }
 
-    //for (int i = stride_x; i < stride_x + count_x; i++) {
-    //    double x = x_1 + i * h_x;
-    //    for (int j = 0; j < N_y;j++) 
-    //    {
-    //        double y = y_1 + j * h_y;
-    //        for (int k = 0; k < N_z; k++)
-    //        {
-    //            double z = z_1 + k * h_z;
-
-
-    //            decart[0] = x;
-    //            decart[1] = y;
-    //            decart[2] = z;
-    //            toSpherical(decart, sph);
-    //            double current_K = 0;
-    //            complex<double> Intens = 0.0;
-    //            int stride_vec = 0;
-
-    //            //if (!(in_range(0.0001, x, 0.0001) && in_range(0.0001, y, 0.0001) && in_range(0.0001, z, 0.0001))) {
-    //            if (sph[2] > R) {
-    //                current_K = K0;
-    //                Intens += fallWave(K0, sph[2], sph[1]);
-    //            }
-    //            else {
-    //                current_K = K;
-    //                stride_vec = nn;
-    //            }
-
-
-    //            for (int ind = 0; ind < nn; ind++) {
-    //                int koord_i = ind / n;
-    //                int koord_j = ind % n;
-    //                double phi_beg = A + koord_i * h_x;
-    //                double phi_end = phi_beg + h_x;
-    //                double theta_beg = C + koord_j * h_y;
-    //                double theta_end = theta_beg + h_y;
-    //                Intens += Integr(phi_beg, phi_end, theta_beg, theta_end, sph[0], sph[1], current_K, sph[2], R) * RR * alpha_beta_vec[ind + stride_vec];
-    //            }
-    //            //}
-    //            //map_int << x << " " << y << " " << z << " " << abs(Intens) << " " << Intens.real() << " " << Intens.imag() << endl;
-    //            //data.push_back({ x,y,z, abs(Intens), Intens.real(), Intens.imag() });
-
-    //            if (_Is_nan(abs(Intens))) Intens = 0.0;
-
-    //            out_data[0][counter] = x;
-    //            out_data[1][counter] = y;
-    //            out_data[2][counter] = z;
-    //            out_data[3][counter] = abs(Intens);
-    //            out_data[4][counter] = Intens.real();
-    //            out_data[5][counter] = Intens.imag();
-    //            counter++;
-    //        }
-    //    }
-    //    if (rank == 0)
-    //        cout << "X = " << x << endl;
-    //}
-
-    //double** all_data;
-    //CreateMatrixMemory(6, N_x * N_y * N_z, all_data);
-
-    //MPI_Gatherv(out_data[0], count_x * N_y * N_z, MPI_DOUBLE, all_data[0], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //MPI_Gatherv(out_data[1], count_x * N_y * N_z, MPI_DOUBLE, all_data[1], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //MPI_Gatherv(out_data[2], count_x * N_y * N_z, MPI_DOUBLE, all_data[2], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //MPI_Gatherv(out_data[3], count_x * N_y * N_z, MPI_DOUBLE, all_data[3], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //MPI_Gatherv(out_data[4], count_x * N_y * N_z, MPI_DOUBLE, all_data[4], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    //MPI_Gatherv(out_data[5], count_x * N_y * N_z, MPI_DOUBLE, all_data[5], array_count_x, array_stride_x, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-    //double create_grid = MPI_Wtime();
-    //if (rank == 0) {
-    //    GenerateVTK_grid(all_data, N_x * N_y * N_z, "test_file.vtk");
-
-    //    double time_one_oscl = 2 * Pi / 3 / pow(10, 8);
-    //    int i = 1;
-    //    for (double time = 0; time < 1 * time_one_oscl; time += time_one_oscl / 10)
-    //    {
-    //        string name = "time" + to_string(i) + ".vtk";
-    //        GenerateVTK_grid(all_data, N_x * N_y * N_z, name, time);
-    //        i++;
-    //    }
-
-    //}
+    }
 
     //double end = MPI_Wtime();
 
