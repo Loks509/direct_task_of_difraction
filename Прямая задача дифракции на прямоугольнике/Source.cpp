@@ -11,7 +11,7 @@ double R = 1.0;
 double K0 = 4.;
 //double K = K0 * 1.2;
 //double K0 = 1;
-double K = K0 * 1.0;
+double K = K0 * 1.5;
 
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
@@ -651,7 +651,8 @@ int main() {
                 double y_end = y_beg + h_y;
                 Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
             }
-            Int *= K * K;
+            //Int *= K * K;
+            Int *= (K0 * K0 - K * K);
             Int += fallWave(K0, x);
             if (_Is_nan(abs(Int))) Int = 0.0;
 
