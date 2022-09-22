@@ -8,11 +8,18 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 4.;
+double K0 = 3.;
 //double K = K0 * 1.2;
 //double K0 = 1;
 double K = K0 * 1.5;
 
+double K_f(double x, double y) {
+    if (x > 1 && x < 1.5 && y > 1 && y < 1.5) {
+        return 2.9 * K0;
+    }
+    else
+        return K0;
+}
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
     complex <double> ed(0, 1.0);
@@ -20,17 +27,20 @@ complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { 
     return exp(ed * k * l) / l;
 }
 
-complex <double> diffKernel(double k, double rho, double phi_1, double phi_2, double theta_1, double theta_2) {
-    complex <double> ed(0, 1.0);
-    double l = rho * sqrt(2 - 2 * sin(theta_1) * sin(theta_2) * cos(phi_1 - phi_2) - 2 * cos(theta_1) * cos(theta_2));
-    complex <double> tmp = ed * k * rho * l;
-    return exp(tmp) * (tmp - 1.0) / (4.0 * Pi * pow(rho, 2) * l);
-}
-
+//плоская волна
 complex <double> fallWave(double k, double x) {
     complex <double> ed(0, 1.0);
     return exp(ed * k * x);
 }
+
+//сферическая волна
+complex <double> fallWave(double k, double x, double y) {
+    complex <double> ed(0, 1.0);
+    double x_c = -1, y_c = 1;
+    double r = sqrt(pow(x - x_c, 2) + pow(y - y_c, 2));
+    return exp(ed * k * r);
+}
+
 
 complex <double> difffallWave(double k, double rho, double theta) {
     complex <double> ed(0, 1.0);
@@ -360,7 +370,7 @@ complex <double> Integr(double x_beg, double x_end, double y_beg, double y_end, 
         {
             double s_x = x_beg + i * h_x + h_x / 2.0;
             double s_y = y_beg + j * h_y + h_y / 2.0;
-            complex <double> tmp = Kernel(s_x, s_y, koll_x, koll_y, K);
+            complex <double> tmp = (K0 * K0 - pow(K_f(s_x, s_y), 2)) * Kernel(s_x, s_y, koll_x, koll_y, K);
             Sum += tmp;
             /*if(K==K0)
                 printf("Koll_phi = %f, Koll_theta = %f, s_phi = %f, s_theta = %f, tmp = %f i %f\n", koll_phi, koll_theta, s_phi, s_theta, tmp.real(), tmp.imag());*/
@@ -371,25 +381,6 @@ complex <double> Integr(double x_beg, double x_end, double y_beg, double y_end, 
     return Sum * h_x * h_y;
 }
 
-complex <double> diffIntegr(double phi_beg, double phi_end, double theta_beg, double theta_end, double koll_phi, double koll_theta, double K, double rho) {
-    int N_int = 4;
-    double h_x = (phi_end - phi_beg) / double(N_int);
-    double h_y = (theta_end - theta_beg) / double(N_int);
-
-
-    complex <double> Sum = 0;
-
-    for (size_t i = 0; i < N_int; i++)
-    {
-        for (size_t j = 0; j < N_int; j++)
-        {
-            double s_phi = phi_beg + i * h_x + h_x / 2.0;
-            double s_theta = theta_beg + j * h_y + h_y / 2.0;
-            Sum += diffKernel(K, rho, koll_phi, s_phi, koll_theta, s_theta) * sin(s_theta);
-        }
-    }
-    return Sum * h_x * h_y;
-}
 
 void ReadFile(const char Patch[], double** Matr, int N, int M) {
     ifstream file(Patch);
@@ -439,6 +430,24 @@ bool in_range(double begin, double var, double end) {
     return (begin < var) && (var < end);
 }
 
+complex <double> getModByX_Y(double _x, double _y, double* alpha, int N, double A, double C, double h_x, double h_y) {
+    complex< double> Int = 0.;
+    int n = int(sqrt(N));
+    for (size_t k = 0; k < N; k++)
+    {
+        int koord_i = k / n;
+        int koord_j = k % n;
+        double x_beg = A + koord_i * h_x;
+        double x_end = x_beg + h_x;
+        double y_beg = C + koord_j * h_y;
+        double y_end = y_beg + h_y;
+        Int += Integr(x_beg, x_end, y_beg, y_end, _x, _y, K) * alpha[k];
+    }
+    Int += fallWave(K0, _x, _y);
+    if (_Is_nan(abs(Int))) Int = 0.0;
+    return Int;
+}
+
 
 int main() {
     int rank, size;
@@ -468,7 +477,6 @@ int main() {
     
 
     CreateMatrixMemory(height, N, Am);
-    double begin = MPI_Wtime();
 
     double RR = R * R;
     for (int I = 0; I < height; I++)  //точки коллокации
@@ -493,25 +501,23 @@ int main() {
                 Am[I][J] = 1.0;
             else
                 Am[I][J] = 0.0;
-            Am[I][J] -= (K0 * K0 - K * K) * Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
+            Am[I][J] -= Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
             
             //cout << "     J = " << J << endl;
         }
-        Vec[I] = fallWave(K0, x_koll);
+        Vec[I] = fallWave(K0, x_koll, y_koll);
 
         if (rank == 0)
             cout << "I = " << I << " " << endl;
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    double end_fill = MPI_Wtime();
     //print_matrix(Am, rank, N, height, "do");
     //MPI_Barrier(MPI_COMM_WORLD);
     //print_vec(Vec, rank, height, "do");
     //fflush(stdout);
     Gauss(Am, Vec, N, rank, size, height, stride);
 
-    double end_gauss = MPI_Wtime();
     //print_matrix(Am, rank, N, height, "posle");
     //MPI_Barrier(MPI_COMM_WORLD);
     //print_vec(Vec, rank, height, "posle");
@@ -542,7 +548,6 @@ int main() {
 
     MPI_Bcast(alpha_beta_vec, N, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-    double sync = MPI_Wtime();
 
 
     
@@ -563,15 +568,16 @@ int main() {
         }
         alpha.close();
     }
-    if (rank == 20) {
+    
+    if (rank == 0) {
         ofstream mod("mod.txt");
         mod << "X Y Z F real imag" << endl;
         for (int i = -2*n; i < 2*n; i++)
         {
-            double x = A + h_x * i;
+            double x = A + h_x * i + h_x / 2.0;
             for (int j = -2*n; j < 2*n; j++)
             {
-                double y = C + h_y * j;
+                double y = C + h_y * j + h_y / 2.0;
 
                 complex< double> Int = 0.;
                 for (size_t k = 0; k < N; k++)
@@ -584,8 +590,7 @@ int main() {
                     double y_end = y_beg + h_y;
                     Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
                 }
-                Int *= K * K;
-                Int += fallWave(K0, x);
+                Int += fallWave(K0, x, y);
                 mod << x << " " << y << " " << 0 << " " << abs(Int) << " " << Int.real() << " " << Int.imag() << endl;
             }
             cout << "i_x = " << i << endl;
@@ -598,11 +603,11 @@ int main() {
     
     double x_1 = -edge, x_2 = edge;
     int N_x = 120;
-    double h_x_k = (x_2 - x_1) / (double)(N_x - 1.0);
+    double h_x_k = (x_2 - x_1) / (double)(N_x);
 
     double y_1 = -edge, y_2 = edge;
     int N_y = 120;
-    double h_y_k = (y_2 - y_1) / (double)(N_y - 1.0);
+    double h_y_k = (y_2 - y_1) / (double)(N_y);
 
     int stride_x = 0;
     int count_x = get_height_by_rank(rank, size, N_x);
@@ -635,10 +640,10 @@ int main() {
     int counter = 0;
 
     for (int i = stride_x; i < stride_x + count_x; i++) {
-        double x = x_1 + i * h_x_k;
+        double x = x_1 + i * h_x_k + h_x_k / 2.;
         for (int j = 0; j < N_y; j++)
         {
-            double y = y_1 + j * h_y_k;
+            double y = y_1 + j * h_y_k + h_y_k / 2.;
 
             complex< double> Int = 0.;
             for (size_t k = 0; k < N; k++)
@@ -651,10 +656,8 @@ int main() {
                 double y_end = y_beg + h_y;
                 Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
             }
-            //Int *= K * K;
-            Int *= (K0 * K0 - K * K);
-            Int += fallWave(K0, x);
-            if (_Is_nan(abs(Int))) Int = 0.0;
+            Int += fallWave(K0, x, y);
+            //if (_Is_nan(abs(Int))) Int = 0.0;
 
             out_data[0][counter] = x;
             out_data[1][counter] = y;
@@ -681,7 +684,7 @@ int main() {
 
     double create_grid = MPI_Wtime();
     if (rank == 0) {
-        GenerateVTK_grid(all_data, N_x * N_y, "test_file.vtk");
+        GenerateVTK_grid(all_data, N_x * N_y, "mod.vtk");
 
         /*double time_one_oscl = 2 * Pi / 3 / pow(10, 8);
         int i = 1;
@@ -693,18 +696,6 @@ int main() {
         }*/
 
     }
-
-    //double end = MPI_Wtime();
-
-    //
-
-    //if (rank == 0) {
-    //    cout << "Time fill = " << end_fill - begin << "  /  " << end_fill - begin << endl;
-    //    cout << "Time gauss = " << end_gauss - end_fill << "  /  " << end_gauss - begin << endl;
-    //    cout << "Time sync = " << sync - end_gauss << "  /  " << sync - begin << endl;
-    //    cout << "Time create_grid = " << create_grid - sync << "  /  " << create_grid - begin << endl;
-    //    cout << "Time create_file = " << end - create_grid << "  /  " << end - begin << endl;
-    //}
 
 
 
