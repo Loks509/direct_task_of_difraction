@@ -444,7 +444,6 @@ complex <double> getModByX_Y(double _x, double _y, double* alpha, int N, double 
         Int += Integr(x_beg, x_end, y_beg, y_end, _x, _y, K) * alpha[k];
     }
     Int += fallWave(K0, _x, _y);
-    if (_Is_nan(abs(Int))) Int = 0.0;
     return Int;
 }
 
