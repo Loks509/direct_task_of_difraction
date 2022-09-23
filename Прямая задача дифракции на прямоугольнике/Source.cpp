@@ -2,6 +2,7 @@
 #include <fstream>
 #include <complex>
 #include <vector>
+#include "matrix.h"
 #include <mpi.h>
 
 using namespace std;
@@ -18,7 +19,7 @@ double K_f(double x, double y) {
         return 2.9 * K0;
     }
     else
-        return K0;
+        return 1.5 * K0;
 }
 
 complex <double> Kernel(double x1, double y1, double x2, double y2, double k) { //если rho_1 = rho_2 то true, иначе false
@@ -58,7 +59,7 @@ template<typename Type>
 void CreateMatrixMemory(int I, int J, Type**& A)
 {
     int i1, i2;
-    A = new Type *[I];
+    A = new Type * [I];
     for (i1 = 0; i1 < I; i1++) {
         A[i1] = new Type[J];
         for (i2 = 0; i2 < J; i2++) {
@@ -139,7 +140,7 @@ void print_vec(complex<double>* _vec, int _rank, int _height, string dop_str = "
 void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _rank, int _size, int _height, int _stride) {
     complex <double> ed(1.0, 0.0);
     complex <double> nul(0.0, 0.0);
-    
+
     complex<double>* tmp_row = new complex<double>[_Nm];
     complex<double> tmp_elem;
 
@@ -184,7 +185,7 @@ void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _ran
         }
         else {
             if (_stride >= k) {     //проверить
-               
+
                 MPI_Recv(tmp_row, _Nm, MPI_DOUBLE_COMPLEX, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &stat);
 
                 MPI_Recv(&tmp_elem, 1, MPI_DOUBLE_COMPLEX, MPI_ANY_SOURCE, 2, MPI_COMM_WORLD, &stat);
@@ -228,7 +229,6 @@ void Gauss(complex <double>** _Matrix, complex <double>* _Vec, int _Nm, int _ran
         }
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
     delete[]tmp_row;
 }
 
@@ -299,7 +299,7 @@ void GenerateVTK(vector<vector<double>> data, string name_file = "out.vtk", doub
 void GenerateVTK_grid(double** data, int count_p, string name_file = "out.vtk", double time = -1.0) {
 
     int countOfPoints = count_p;
-    int size =  pow(countOfPoints, 1.0 / 2.0);
+    int size = pow(countOfPoints, 1.0 / 2.0);
 
     cout << "Points " << countOfPoints << endl;
 
@@ -343,7 +343,7 @@ void GenerateVTK_grid(double** data, int count_p, string name_file = "out.vtk", 
         else            out << (complex<double>(data[4][ind], data[5][ind]) * timeFunc(time)).real() << endl;
     }
 
-    out << 
+    out <<
         "SCALARS imag double 1" << endl <<
         "LOOKUP_TABLE default" << endl;
     for (int ind = 0; ind < countOfPoints; ind++) {
@@ -371,6 +371,30 @@ complex <double> Integr(double x_beg, double x_end, double y_beg, double y_end, 
             double s_x = x_beg + i * h_x + h_x / 2.0;
             double s_y = y_beg + j * h_y + h_y / 2.0;
             complex <double> tmp = (K0 * K0 - pow(K_f(s_x, s_y), 2)) * Kernel(s_x, s_y, koll_x, koll_y, K);
+            Sum += tmp;
+            /*if(K==K0)
+                printf("Koll_phi = %f, Koll_theta = %f, s_phi = %f, s_theta = %f, tmp = %f i %f\n", koll_phi, koll_theta, s_phi, s_theta, tmp.real(), tmp.imag());*/
+        }
+    }
+    //exit(-1);
+    //cout << "Sum = " << Sum * h_x * h_y << endl;
+    return Sum * h_x * h_y;
+}
+
+complex <double> Integr_for_reverse(double x_beg, double x_end, double y_beg, double y_end, double koll_x, double koll_y, double K) {
+    int N_int = 4;
+    double h_x = (x_end - x_beg) / double(N_int);
+    double h_y = (y_end - y_beg) / double(N_int);
+
+    complex <double> Sum = 0;
+    for (size_t i = 0; i < N_int; i++)
+    {
+        //printf("I = %d \n", i);
+        for (size_t j = 0; j < N_int; j++)
+        {
+            double s_x = x_beg + i * h_x + h_x / 2.0;
+            double s_y = y_beg + j * h_y + h_y / 2.0;
+            complex <double> tmp = Kernel(s_x, s_y, koll_x, koll_y, K);
             Sum += tmp;
             /*if(K==K0)
                 printf("Koll_phi = %f, Koll_theta = %f, s_phi = %f, s_theta = %f, tmp = %f i %f\n", koll_phi, koll_theta, s_phi, s_theta, tmp.real(), tmp.imag());*/
@@ -430,7 +454,7 @@ bool in_range(double begin, double var, double end) {
     return (begin < var) && (var < end);
 }
 
-complex <double> getModByX_Y(double _x, double _y, double* alpha, int N, double A, double C, double h_x, double h_y) {
+complex <double> getModByX_Y(double _x, double _y, complex<double>* alpha, int N, double A, double C, double h_x, double h_y) {
     complex< double> Int = 0.;
     int n = int(sqrt(N));
     for (size_t k = 0; k < N; k++)
@@ -447,6 +471,24 @@ complex <double> getModByX_Y(double _x, double _y, double* alpha, int N, double 
     return Int;
 }
 
+void createFileByAlpha(complex<double> *aplha_v, int N, double h_x, double h_y,double A, double C, const char* name) {
+    int n = sqrt(N);
+    ofstream alpha(name);
+
+    alpha << "X Y Z F real imag" << endl;
+    for (size_t I = 0; I < N; I++)
+    {
+        int _i = I / n;
+        int _j = I % n;
+        double x = A + _i * h_x + h_x / 2.0;
+        double y = C + _j * h_y + h_y / 2.0;
+        //alpha_beta_vec[I] = fallWave(K0, x);
+        alpha << x << " " << y << " " << 0 << " " << abs(aplha_v[I]) << " " << aplha_v[I].real() << " " << aplha_v[I].imag() << endl;
+        //file << x << " " << Vec[i] << " " << u(x) << endl;
+        //cout << phi << " " << Vec[i] << endl;
+    }
+    alpha.close();
+}
 
 int main() {
     int rank, size;
@@ -456,7 +498,7 @@ int main() {
 
     double A = 0, B = 2;           //изменение x
     double C = 0, D = 2;               //изменение y
-    int n = 30;
+    int n = 10;
     int N = n * n;
     double h_x = (B - A) / double(n);
     double h_y = (D - C) / double(n);
@@ -469,15 +511,14 @@ int main() {
         stride += get_height_by_rank(i, size, N);
     }
 
-    cout << "Proc " << rank << " create " << height << " X " << N <<" Stride "<<stride<< endl;
+    cout << "Proc " << rank << " create " << height << " X " << N << " Stride " << stride << endl;
 
 
     complex <double>** Am, * Vec = new complex <double>[height];
-    
+
 
     CreateMatrixMemory(height, N, Am);
 
-    double RR = R * R;
     for (int I = 0; I < height; I++)  //точки коллокации
     {
         int global_I = I + stride;
@@ -501,7 +542,7 @@ int main() {
             else
                 Am[I][J] = 0.0;
             Am[I][J] -= Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
-            
+
             //cout << "     J = " << J << endl;
         }
         Vec[I] = fallWave(K0, x_koll, y_koll);
@@ -529,7 +570,7 @@ int main() {
     int* array_stride = nullptr;
     int* array_height = nullptr;
 
-    
+
     //объединение полученных данных
     if (rank == 0) {
         array_stride = new int[size];
@@ -543,38 +584,39 @@ int main() {
             //cout << "rank = " << r << "   stride = " << array_stride[r] << "   height = " << array_height[r] << endl;
         }
     }
-    MPI_Gatherv(Vec,height,MPI_DOUBLE_COMPLEX,alpha_beta_vec,array_height,array_stride, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(Vec, height, MPI_DOUBLE_COMPLEX, alpha_beta_vec, array_height, array_stride, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
     MPI_Bcast(alpha_beta_vec, N, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
+    delete[] Vec;
 
 
-    
     if (rank == 0) {
-        ofstream alpha("alpha.txt");
+        createFileByAlpha(alpha_beta_vec, N, h_x, h_y, A, C, "alpha.txt");
+        //ofstream alpha("alpha.txt");
 
-        alpha << "X Y Z F real imag" << endl;
-        for (size_t I = 0; I < N; I++)
-        {
-            int _i = I / n;
-            int _j = I % n;
-            double x = A + _i * h_x + h_x / 2.0;
-            double y = C + _j * h_y + h_y / 2.0;
-            //alpha_beta_vec[I] = fallWave(K0, x);
-            alpha << x << " " << y << " " << 0 << " " << abs(alpha_beta_vec[I]) << " " << alpha_beta_vec[I].real() << " " << alpha_beta_vec[I].imag() << endl;
-            //file << x << " " << Vec[i] << " " << u(x) << endl;
-            //cout << phi << " " << Vec[i] << endl;
-        }
-        alpha.close();
+        //alpha << "X Y Z F real imag" << endl;
+        //for (size_t I = 0; I < N; I++)
+        //{
+        //    int _i = I / n;
+        //    int _j = I % n;
+        //    double x = A + _i * h_x + h_x / 2.0;
+        //    double y = C + _j * h_y + h_y / 2.0;
+        //    //alpha_beta_vec[I] = fallWave(K0, x);
+        //    alpha << x << " " << y << " " << 0 << " " << abs(alpha_beta_vec[I]) << " " << alpha_beta_vec[I].real() << " " << alpha_beta_vec[I].imag() << endl;
+        //    //file << x << " " << Vec[i] << " " << u(x) << endl;
+        //    //cout << phi << " " << Vec[i] << endl;
+        //}
+        //alpha.close();
     }
-    
-    if (rank == 0) {
+
+    if (rank == 20) {
         ofstream mod("mod.txt");
         mod << "X Y Z F real imag" << endl;
-        for (int i = -2*n; i < 2*n; i++)
+        for (int i = -2 * n; i < 2 * n; i++)
         {
             double x = A + h_x * i + h_x / 2.0;
-            for (int j = -2*n; j < 2*n; j++)
+            for (int j = -2 * n; j < 2 * n; j++)
             {
                 double y = C + h_y * j + h_y / 2.0;
 
@@ -597,9 +639,69 @@ int main() {
     }
 
 
+    ///////////обратная задача
+
+    
+    /*
+     * при n = 40 на каждой стороне по 40 в 20 слоев
+     */
+    if (rank == 0) {
+        if ((N % 2) % n != 0) {
+            cout << "Error in size\n";
+            return -1;
+        }
+
+        CreateMatrixMemory(N, N, Am);
+        Vec = new complex<double>[N];
+        int count_of_layer = (N / 2) / n;       //количество слоев по n в каждом
+
+        double h_layer_y = 0.01;
+        double h_layer_x = (B - A) / double(n);
+        double begin_layer_y = 0.1;               //расстояние, на котором начинаются точки наблюдения
+
+        for (size_t i = 0; i < count_of_layer; i++)
+        {
+            double y_up = D + begin_layer_y + i * h_layer_y + h_layer_y / 2.;
+            double y_down = C - begin_layer_y - i * h_layer_y + h_layer_y / 2.;
+            for (size_t j = 0; j < n; j++)
+            {
+                double x = A + j * h_layer_x + h_layer_x / 2.;
+                int ind = i * n + j;
+                for (size_t k = 0; k < N; k++)
+                {
+                    int koord_i = k / n;
+                    int koord_j = k % n;
+                    double x_beg = A + koord_i * h_x;
+                    double x_end = x_beg + h_x;
+                    double y_beg = C + koord_j * h_y;
+                    double y_end = y_beg + h_y;
+                    Am[ind][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_up, K) * alpha_beta_vec[k];
+                    Am[ind + N / 2][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_down, K) * alpha_beta_vec[k];
+                }
+                Vec[ind] = getModByX_Y(x, y_up, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_up);
+                Vec[ind + N / 2] = getModByX_Y(x, y_down, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_down);
+                cout << "Ind = " << ind << endl;
+                printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
+            }
+        }
+        //printMatrix(Am, N, N);
+        //Matrix_lib::precond(Am, N);
+        Gauss(Am, Vec, N, 0, 1, N, 0);      //последовательный Гаусс
+
+        for (size_t i = 0; i < N; i++)
+        {
+            cout << Vec[i] << endl;
+        }
+        createFileByAlpha(Vec, N, h_x, h_y, A, C, "reverse_alpha.txt");
+
+    }
+
+    ///////////обратная задача
+    MPI_Finalize();
+    return 0;
 
     double edge = 4.0;
-    
+
     double x_1 = -edge, x_2 = edge;
     int N_x = 120;
     double h_x_k = (x_2 - x_1) / (double)(N_x);
@@ -635,7 +737,7 @@ int main() {
     CreateMatrixMemory(6, count_x * N_y, out_data);
 
     double* decart = new double[3], * sph = new double[3];
-    
+
     int counter = 0;
 
     for (int i = stride_x; i < stride_x + count_x; i++) {
@@ -644,8 +746,8 @@ int main() {
         {
             double y = y_1 + j * h_y_k + h_y_k / 2.;
 
-            complex< double> Int = 0.;
-            for (size_t k = 0; k < N; k++)
+            complex< double> Int = getModByX_Y(x, y, alpha_beta_vec, N, A, C, h_x, h_y);
+            /*for (size_t k = 0; k < N; k++)
             {
                 int koord_i = k / n;
                 int koord_j = k % n;
@@ -655,7 +757,7 @@ int main() {
                 double y_end = y_beg + h_y;
                 Int += Integr(x_beg, x_end, y_beg, y_end, x, y, K) * alpha_beta_vec[k];
             }
-            Int += fallWave(K0, x, y);
+            Int += fallWave(K0, x, y);*/
             //if (_Is_nan(abs(Int))) Int = 0.0;
 
             out_data[0][counter] = x;
