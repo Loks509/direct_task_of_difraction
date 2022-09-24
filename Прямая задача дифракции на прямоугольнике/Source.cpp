@@ -498,7 +498,7 @@ int main() {
 
     double A = 0, B = 2;           //изменение x
     double C = 0, D = 2;               //изменение y
-    int n = 10;
+    int n = 30;
     int N = n * n;
     double h_x = (B - A) / double(n);
     double h_y = (D - C) / double(n);
@@ -657,7 +657,7 @@ int main() {
 
         double h_layer_y = 0.01;
         double h_layer_x = (B - A) / double(n);
-        double begin_layer_y = 0.1;               //расстояние, на котором начинаются точки наблюдения
+        double begin_layer_y = 0.5;               //расстояние, на котором начинаются точки наблюдения
 
         for (size_t i = 0; i < count_of_layer; i++)
         {
@@ -675,17 +675,17 @@ int main() {
                     double x_end = x_beg + h_x;
                     double y_beg = C + koord_j * h_y;
                     double y_end = y_beg + h_y;
-                    Am[ind][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_up, K) * alpha_beta_vec[k];
-                    Am[ind + N / 2][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_down, K) * alpha_beta_vec[k];
+                    Am[ind][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_up, K0) * alpha_beta_vec[k];
+                    Am[ind + N / 2][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_down, K0) * alpha_beta_vec[k];
                 }
                 Vec[ind] = getModByX_Y(x, y_up, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_up);
                 Vec[ind + N / 2] = getModByX_Y(x, y_down, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_down);
-                cout << "Ind = " << ind << endl;
-                printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
+                //cout << "Ind = " << ind << endl;
+                //printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
             }
         }
         //printMatrix(Am, N, N);
-        //Matrix_lib::precond(Am, N);
+        Am = Matrix_lib::precond(Am, 100);
         Gauss(Am, Vec, N, 0, 1, N, 0);      //последовательный Гаусс
 
         for (size_t i = 0; i < N; i++)
@@ -694,6 +694,40 @@ int main() {
         }
         createFileByAlpha(Vec, N, h_x, h_y, A, C, "reverse_alpha.txt");
 
+        complex<double> *k_y = new complex<double>[N];
+        
+
+        for (int I = 0; I < N; I++)  //точки коллокации
+        {
+            int global_I = I + stride;
+
+            int koll_i = global_I / n;
+            int koll_j = global_I % n;
+
+            double x = A + koll_i * h_x + h_x / 2.0;
+            double y = C + koll_j * h_y + h_y / 2.0;
+
+            complex<double> Int = 0.;
+            for (int J = 0; J < N; J++)  //координаты
+            {
+                int koord_i = J / n;
+                int koord_j = J % n;
+                double x_beg = A + koord_i * h_x;
+                double x_end = x_beg + h_x;
+                double y_beg = C + koord_j * h_y;
+                double y_end = y_beg + h_y;
+
+                Int += Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y, K0) * Vec[J];
+
+            }
+            Int += fallWave(K0, x, y);
+            Int = Vec[I] / Int + K0 * K0;
+
+            k_y[I] = sqrt(Int);
+            if (rank == 0)
+                cout << "I = " << I << " " << endl;
+        }
+        createFileByAlpha(k_y, N, h_x, h_y, A, C, "reverse_k.txt");
     }
 
     ///////////обратная задача

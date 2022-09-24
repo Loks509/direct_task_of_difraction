@@ -12,15 +12,16 @@
 using namespace std;
 
 namespace Matrix_lib {
-    double** createm(size_t M = 3, size_t N = 4) {
-        double** var = (double**)malloc(M * sizeof(double*));
+    template <class t>
+    t** createm(size_t M = 3, size_t N = 4) {
+        t** var = (t**)malloc(M * sizeof(t*));
         for (int i = 0; i < M; i++)
-            var[i] = (double*)malloc(N * sizeof(double));
+            var[i] = (t*)malloc(N * sizeof(t));
         return var;
     }
-
-    double* createv(size_t N = 3) {
-        double* var = (double*)malloc(N * sizeof(double));
+    template <class t>
+    t* createv(size_t N = 3) {
+        double* var = (t*)malloc(N * sizeof(t));
         return var;
     }
 
@@ -131,7 +132,7 @@ namespace Matrix_lib {
         }
     }
 
-    inline double** mult(double** var1, double** var2) {
+    /*inline double** mult(double** var1, double** var2) {
         size_t N = _msize(var1[0]) / sizeof(var1[0][0]);
         double** res = createm(N, N);
         for (size_t i = 0; i < N; i++)
@@ -147,10 +148,12 @@ namespace Matrix_lib {
             }
         }
         return res;
-    }
-    inline double** mult(double var1, double** var2) {
+    }*/
+
+    template<typename t>
+    inline t** mult(t var1, t** var2) {
         size_t N = _msize(var2[0]) / sizeof(var2[0][0]);
-        double** res = createm(N, N);
+        t** res = createm<t>(N, N);
         for (size_t i = 0; i < N; i++)
         {
             for (size_t j = 0; j < N; j++)
@@ -198,7 +201,7 @@ namespace Matrix_lib {
         return var_Det;
     }
 
-    double** diag(double** var) {
+   /* double** diag(double** var) {
         size_t N = _msize(var[0]) / sizeof(var[0][0]);
         double** var_D = createm(N, N), ** var_L = createm(N, N), ** var_U = createm(N, N);
 
@@ -219,18 +222,18 @@ namespace Matrix_lib {
             }
         }
         return var_D;
-    }
+    }*/
 
-    double* eigenvalues(double** var) {
+    /*double* eigenvalues(double** var) {
         size_t N = _msize(var[0]) / sizeof(var[0][0]);
         double** var_D = diag(var), * res = createv(N);
         for (size_t i = 0; i < N; i++)
             res[i] = var_D[i][i];
 
         return res;
-    }
+    }*/
 
-    double cond(double** var) {
+    /*double cond(double** var) {
         size_t N = _msize(var[0]) / sizeof(var[0][0]);
         double* var1 = eigenvalues(var);
 
@@ -242,11 +245,12 @@ namespace Matrix_lib {
         }
         cout << "Max = " << max << "   Min = " << min << endl;
         return max / min;
-    }
+    }*/
 
-    double** Minus(double** var1, double** var2) {
+    template<typename t>
+    t** Minus(t** var1, t** var2) {
         size_t N = _msize(var1[0]) / sizeof(var1[0][0]);
-        double** res = createm(N, N);
+        t** res = createm<t>(N, N);
 
         for (size_t i = 0; i < N; i++)
         {
@@ -258,9 +262,10 @@ namespace Matrix_lib {
         return res;
     }
 
-    double** Plus(double** var1, double** var2) {
+    template <class t>
+    t** Plus(t** var1, t** var2) {
         size_t N = _msize(var1[0]) / sizeof(var1[0][0]);
-        double** res = createm(N, N);
+        t** res = createm<t>(N, N);
 
         for (size_t i = 0; i < N; i++)
         {
@@ -305,9 +310,11 @@ namespace Matrix_lib {
             var[i][N] = Sum;
         }
     }
-    double** precond(double** var, int k) {
+    template <class t>
+    t** precond(t** var, int k) {
         size_t N = _msize(var[0]) / sizeof(var[0][0]);
-        double** E = createm(N, N), ** B = createm(N, N), ** res = createm(N, N + 1);
+        t** E = createm<t>(N, N);
+        t** B = createm<t>(N, N), ** res = createm<t>(N, N + 1);
         for (size_t i = 0; i < N; i++)
         {
             for (size_t j = 0; j < N; j++)
@@ -317,9 +324,9 @@ namespace Matrix_lib {
             }
         }
 
-        B = Minus(var, E);
+        B = Minus<t>(var, E);
         double alpha = 2.0 * k * pow(10, -6);
-        res = Plus(mult(alpha, E), B);
+        res = Plus<complex<double>>(mult<t>(alpha, E), B);
 
         return res;
     }
