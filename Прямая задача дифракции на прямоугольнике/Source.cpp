@@ -9,14 +9,14 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 3.;
+double K0 = 60.;
 //double K = K0 * 1.2;
 //double K0 = 1;
 double K = K0 * 1.5;
 
 double K_f(double x, double y) {
-    if (x > 1 && x < 1.5 && y > 1 && y < 1.5) {
-        return 2.9 * K0;
+    if (x > 0.04 && x < 0.06 && y > 0.04 && y < 0.06) {
+        return 5.0 * K0;
     }
     else
         return 1.5 * K0;
@@ -37,17 +37,11 @@ complex <double> fallWave(double k, double x) {
 //сферическая волна
 complex <double> fallWave(double k, double x, double y) {
     complex <double> ed(0, 1.0);
-    double x_c = -1, y_c = 1;
+    double x_c = -0.0375, y_c = 0.0375;
     double r = sqrt(pow(x - x_c, 2) + pow(y - y_c, 2));
     return exp(ed * k * r);
 }
 
-
-complex <double> difffallWave(double k, double rho, double theta) {
-    complex <double> ed(0, 1.0);
-    complex <double> tmp = ed * k * cos(theta);
-    return tmp * exp(tmp * rho);
-}
 
 complex <double> timeFunc(double t) {
     complex <double> ed(0, 1.0);
@@ -396,6 +390,7 @@ complex <double> Integr_for_reverse(double x_beg, double x_end, double y_beg, do
             double s_y = y_beg + j * h_y + h_y / 2.0;
             complex <double> tmp = Kernel(s_x, s_y, koll_x, koll_y, K);
             Sum += tmp;
+            //printf("s_x = %f, s_y = %f, koll_x = %f, koll_y = %f\n", s_x, s_y, koll_x, koll_y);
             /*if(K==K0)
                 printf("Koll_phi = %f, Koll_theta = %f, s_phi = %f, s_theta = %f, tmp = %f i %f\n", koll_phi, koll_theta, s_phi, s_theta, tmp.real(), tmp.imag());*/
         }
@@ -465,7 +460,7 @@ complex <double> getModByX_Y(double _x, double _y, complex<double>* alpha, int N
         double x_end = x_beg + h_x;
         double y_beg = C + koord_j * h_y;
         double y_end = y_beg + h_y;
-        Int += Integr(x_beg, x_end, y_beg, y_end, _x, _y, K) * alpha[k];
+        Int += Integr(x_beg, x_end, y_beg, y_end, _x, _y, K0) * alpha[k];
     }
     Int += fallWave(K0, _x, _y);
     return Int;
@@ -496,9 +491,9 @@ int main() {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    double A = 0, B = 2;           //изменение x
-    double C = 0, D = 2;               //изменение y
-    int n = 30;
+    double A = 0, B = 0.075;           //изменение x
+    double C = 0, D = 0.075;               //изменение y
+    int n = 8;
     int N = n * n;
     double h_x = (B - A) / double(n);
     double h_y = (D - C) / double(n);
@@ -541,7 +536,7 @@ int main() {
                 Am[I][J] = 1.0;
             else
                 Am[I][J] = 0.0;
-            Am[I][J] -= Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K);
+            Am[I][J] -= Integr(x_beg, x_end, y_beg, y_end, x_koll, y_koll, K0);
 
             //cout << "     J = " << J << endl;
         }
@@ -657,12 +652,12 @@ int main() {
 
         double h_layer_y = 0.01;
         double h_layer_x = (B - A) / double(n);
-        double begin_layer_y = 0.5;               //расстояние, на котором начинаются точки наблюдения
+        double begin_layer_y = h_y;               //расстояние, на котором начинаются точки наблюдения
 
         for (size_t i = 0; i < count_of_layer; i++)
         {
             double y_up = D + begin_layer_y + i * h_layer_y + h_layer_y / 2.;
-            double y_down = C - begin_layer_y - i * h_layer_y + h_layer_y / 2.;
+            double y_down = C - begin_layer_y - i * h_layer_y - h_layer_y / 2.;
             for (size_t j = 0; j < n; j++)
             {
                 double x = A + j * h_layer_x + h_layer_x / 2.;
@@ -675,17 +670,17 @@ int main() {
                     double x_end = x_beg + h_x;
                     double y_beg = C + koord_j * h_y;
                     double y_end = y_beg + h_y;
-                    Am[ind][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_up, K0) * alpha_beta_vec[k];
-                    Am[ind + N / 2][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_down, K0) * alpha_beta_vec[k];
+                    Am[ind][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_up, K0);
+                    Am[ind + N / 2][k] = Integr_for_reverse(x_beg, x_end, y_beg, y_end, x, y_down, K0);
                 }
                 Vec[ind] = getModByX_Y(x, y_up, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_up);
                 Vec[ind + N / 2] = getModByX_Y(x, y_down, alpha_beta_vec, N, A, C, h_x, h_y) - fallWave(K0, x, y_down);
-                //cout << "Ind = " << ind << endl;
-                //printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
+                cout << "Ind = " << ind << endl;
+                printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
             }
         }
         //printMatrix(Am, N, N);
-        Am = Matrix_lib::precond(Am, 100);
+        //Am = Matrix_lib::precond(Am, 100);
         Gauss(Am, Vec, N, 0, 1, N, 0);      //последовательный Гаусс
 
         for (size_t i = 0; i < N; i++)
@@ -723,9 +718,9 @@ int main() {
             Int += fallWave(K0, x, y);
             Int = Vec[I] / Int + K0 * K0;
 
-            k_y[I] = sqrt(Int);
+            k_y[I] = Int;
             if (rank == 0)
-                cout << "I = " << I << " " << endl;
+                cout << "I_reverse = " << I << " " << endl;
         }
         createFileByAlpha(k_y, N, h_x, h_y, A, C, "reverse_k.txt");
     }
