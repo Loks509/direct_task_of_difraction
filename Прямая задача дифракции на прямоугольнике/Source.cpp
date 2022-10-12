@@ -9,7 +9,12 @@ using namespace std;
 
 double Pi = acos(-1);
 double R = 1.0;
-double K0 = 60.;
+
+double Hz = 5. * pow(10, 8);
+
+double v_l = 3. * pow(10, 10);
+double K0 = 2.0 * Pi / v_l * Hz;
+
 //double K = K0 * 1.2;
 //double K0 = 1;
 double K = K0 * 1.5;
@@ -646,13 +651,17 @@ int main() {
             return -1;
         }
 
+        double** nabl;
+        CreateMatrixMemory(N, 3, nabl);
+
+
         CreateMatrixMemory(N, N, Am);
         Vec = new complex<double>[N];
         int count_of_layer = (N / 2) / n;       //количество слоев по n в каждом
 
-        double h_layer_y = 0.01;
+        double h_layer_y = 0.002;
         double h_layer_x = (B - A) / double(n);
-        double begin_layer_y = h_y;               //расстояние, на котором начинаются точки наблюдения
+        double begin_layer_y = h_y*2.;               //расстояние, на котором начинаются точки наблюдения
 
         for (size_t i = 0; i < count_of_layer; i++)
         {
@@ -662,6 +671,13 @@ int main() {
             {
                 double x = A + j * h_layer_x + h_layer_x / 2.;
                 int ind = i * n + j;
+                nabl[ind][0] = x;
+                nabl[ind][1] = y_up;
+                nabl[ind][2] = 0;
+                nabl[ind + N / 2][0] = x;
+                nabl[ind + N / 2][1] = y_down;
+                nabl[ind + N / 2][2] = 0;
+
                 for (size_t k = 0; k < N; k++)
                 {
                     int koord_i = k / n;
@@ -679,6 +695,13 @@ int main() {
                 printf("x = %f, y_u = %f, y_d = %f\n", x, y_up, y_down);
             }
         }
+        ofstream nabl_point("nabl_point.txt");
+        nabl_point << "X Y Z" << endl;
+        for (size_t i = 0; i < N; i++)
+        {
+            nabl_point << nabl[i][0] << " " << nabl[i][1] << " " << nabl[i][2] << endl;
+        }
+        nabl_point.close();
         //printMatrix(Am, N, N);
         //Am = Matrix_lib::precond(Am, 100);
         Gauss(Am, Vec, N, 0, 1, N, 0);      //последовательный Гаусс
@@ -691,6 +714,7 @@ int main() {
 
         complex<double> *k_y = new complex<double>[N];
         
+        complex<double>* k_y_ish = new complex<double>[N];
 
         for (int I = 0; I < N; I++)  //точки коллокации
         {
@@ -719,10 +743,15 @@ int main() {
             Int = Vec[I] / Int + K0 * K0;
 
             k_y[I] = Int;
+
+            k_y_ish[I] = K_f(x, y);
+
+
             if (rank == 0)
                 cout << "I_reverse = " << I << " " << endl;
         }
         createFileByAlpha(k_y, N, h_x, h_y, A, C, "reverse_k.txt");
+        createFileByAlpha(k_y_ish, N, h_x, h_y, A, C, "ish_k.txt");
     }
 
     ///////////обратная задача
